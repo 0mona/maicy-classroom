@@ -6,7 +6,7 @@ let accessKey=null,documents=null,config=null,currentDoc=null,appLoading=null;
 const imageCache=new Map(),views={};
 const from64=s=>Uint8Array.from(atob(s),c=>c.charCodeAt(0));
 const to64=b=>btoa(String.fromCharCode(...new Uint8Array(b)));
-async function bytes(url){const r=await fetch('./'+url.replace(/^\//,''),{cache:'no-store'});if(!r.ok)throw Error('文件加载失败，请稍后重试。');return new Uint8Array(await r.arrayBuffer());}
+async function bytes(url){let last;for(let attempt=0;attempt<3;attempt++){const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),12000);try{const r=await fetch('./'+url.replace(/^\//,''),{signal:controller.signal,cache:'default'});if(!r.ok)throw Error('HTTP '+r.status);return new Uint8Array(await r.arrayBuffer());}catch(e){last=e;}finally{clearTimeout(timer);}}throw Error('图片连接超时，请点“重新加载题目”重试。');}
 async function decrypt(data){return crypto.subtle.decrypt({name:'AES-GCM',iv:data.slice(0,12)},accessKey,data.slice(12));}
 async function readCatalog(){return JSON.parse(new TextDecoder().decode(await decrypt(await bytes('/catalog.bin'))));}
 function showLogin(message=''){root.hidden=true;el('loadingApp').hidden=true;el('passwordPanel').hidden=false;el('materialPanel').hidden=true;el('unlock').hidden=false;el('unlockError').textContent=message;el('accessPassword').focus();}
@@ -18,7 +18,7 @@ window.resolveProtectedImage=async url=>{
  if(!imageCache.has(url))imageCache.set(url,(async()=>{const data=new Uint8Array(await decrypt(await bytes(url)));return URL.createObjectURL(new Blob([data],{type:data[0]===137?'image/png':'image/jpeg'}));})().catch(e=>{imageCache.delete(url);throw e;}));
  return imageCache.get(url);
 };
-function ensureApp(){if(window.mountClassroom)return Promise.resolve();if(!appLoading)appLoading=new Promise((resolve,reject)=>{const script=document.createElement('script');script.src='./app.js';script.onload=resolve;script.onerror=()=>reject(Error('画板加载失败，请刷新后重试。'));document.body.append(script);});return appLoading;}
+function ensureApp(){if(window.mountClassroom)return Promise.resolve();if(!appLoading)appLoading=new Promise((resolve,reject)=>{const script=document.createElement('script');script.src='./app.js?v=5';script.onload=resolve;script.onerror=()=>reject(Error('画板加载失败，请刷新后重试。'));document.body.append(script);});return appLoading;}
 async function switchDoc(doc,replace=false){
  if(!accessKey||!documents?.[doc])return;
  if(currentDoc===doc&&window.classroomApp){el('unlock').hidden=true;root.hidden=false;document.body.classList.remove('menu');return;}
